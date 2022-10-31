@@ -7,5 +7,5 @@ BETA = 1
 KEY = 12
 
 M = 400
-SIGMA = 20
+SIGMA = 100
 

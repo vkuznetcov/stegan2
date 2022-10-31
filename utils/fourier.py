@@ -7,7 +7,10 @@ def get_fft_image(image):
 
 
 def get_inverse_fft_image(image_complex):
-    return np.round(np.real(ifft2(image_complex)))
+    result = np.round(np.real(ifft2(image_complex)))
+    result[result < 0] = 0
+    result[result > 255] = 255
+    return result.astype('uint8')
 
 
 def get_phase_matrix(image):

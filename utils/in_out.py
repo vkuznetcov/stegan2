@@ -1,3 +1,4 @@
+import numpy as np
 from skimage.io import imshow, show, imread, imsave
 
 

@@ -17,20 +17,10 @@ def get_H_zone(image, modifier=0.25):
     return result
 
 
-def split_image_to_4_parts(image):
-    x_center, y_center = int(image.shape[0] / 2), int(image.shape[1] / 2)
-
-    left_up = image[0:x_center, 0:y_center]
-    right_up = image[0:x_center, y_center:image.shape[1]]
-    left_down = image[x_center:image.shape[0], 0:y_center]
-    right_down = image[x_center:image.shape[0], y_center:image.shape[1]]
-    return [left_up, right_up, left_down, right_down]
-
-
 def merge_pictures_H_zone(image_source, snipped_part, modifier=0.25):
     # modifier - 1/4 часть от image
     image_shape = image_source.shape
-    result_shape = (image_shape[0] * modifier, image_shape[1] * modifier)  # размер H (64x64)
+    result_shape = (image_shape[0] * modifier, image_shape[1] * modifier)  # размер H (128.0, 128.0)
     y_border_size = result_shape[1]
     x_border_size = result_shape[0]
 

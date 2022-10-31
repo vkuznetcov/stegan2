@@ -12,7 +12,7 @@ def builtin_watermark(f_w, f, alpha=1):
     return (f_w - f) / alpha
 
 
-def generate_watermark(length, math_expectation, sigma, key):
+def generate_watermark(length, math_expectation, sigma, key=None):
     random.seed(key)
     result = np.zeros(length)
     for i in range(0, length, 1):

@@ -1,5 +1,3 @@
-import time
-
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,17 +31,20 @@ def get_optimal_alpha(f, abs_fft_container, phase_fft_container, watermark):
         changed_watermark = builtin_watermark(H_zone_p, f, alpha)
         rho = get_rho(watermark, changed_watermark)
 
-        psnr = cv2.PSNR(watermark, changed_watermark)
+        psnr = cv2.PSNR(container, processed_image)
 
         if rho > 0.9:
             params[psnr] = alpha
+            print(f'\033[32m', end='')
 
         print(f'𝜌: {rho}, α: {alpha}, PSNR: {psnr}')
         alpha += 0.02
 
-    min_psnr = min(params.keys())
+    min_psnr = max(params.keys())
     max_alpha = params[min_psnr]
+    print(f'\033[35m', end='')
     print(f'Result: α: {max_alpha}, Min PSNR: {min_psnr}')
+    print(f'\033[0m', end='')
     return max_alpha
 
 
@@ -75,9 +76,9 @@ if __name__ == '__main__':
     write_image(processed_image, 'resource/bridge_processed.tif')
 
     # 5. Считать носитель информации из файла. Реализовать трансформацию исходного контейнера к пространству признаков
-    processed_image2 = read_image('resource/bridge_processed.tif')
-    fft_p_image = get_fft_image(processed_image)
-    abs_fft_p_image = get_abs_matrix(fft_p_image)
+    processed_image     = read_image('resource/bridge_processed.tif')
+    fft_p_image         = get_fft_image(processed_image)
+    abs_fft_p_image     = get_abs_matrix(fft_p_image)
 
     # 6. Сформировать оценку встроенного ЦВЗ 𝛺̃неслепым методом (то есть, с использованием
     # матрицы признаков исходного контейнера); выполнить детектирование при помощи функции
@@ -86,15 +87,23 @@ if __name__ == '__main__':
     changed_watermark = builtin_watermark(H_zone_p, H_zone, ALPHA)
     rho = get_rho(watermark, changed_watermark)
 
-    print(f'𝜌: {rho}')
+    print('=============================')
+    print(f'Current 𝜌: {rho}, α: {ALPHA}')
+    print('=============================')
 
     # 7. Осуществить автоматический подбор значения параметра встраивания методом перебора
     # с целью обеспечения заданного значения функции близости 𝜌
-    # get_optimal_alpha(H_zone, abs_fft_container, phase_fft_container, watermark)
+    print('=============================')
+    print(f'Search for best α...')
+    print('=============================')
+    get_optimal_alpha(H_zone, abs_fft_container, phase_fft_container, watermark)
 
     # 8. «Ложное обнаружение»: генерируем 100 случайных последовательностей той же длины, что и 𝛺,
     # и ищем значение функции близости 𝛺 с каждой из них. Строим график, проверяем,
     # удаётся ли выбрать правильную последовательность.
+    print('=============================')
+    print('Fake detection calculating...')
+    print('=============================')
     N = 100
     rho_array = []
     rho_array.append(rho)

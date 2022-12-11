@@ -1,0 +1,6 @@
+ALPHA = 0.95
+BETA = 1
+KEY = 12
+
+M = 700
+SIGMA = 50

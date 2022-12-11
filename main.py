@@ -1,151 +1,118 @@
-import cv2
-import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import pyplot as plt
+from skimage.io import imsave
 
-from scipy.signal import convolve2d
-from consts import ALPHA, BETA, KEY, M, SIGMA
-from utils.embedding import additional_embedding
-from utils.fourier import get_fft_image, get_phase_matrix, get_abs_matrix, get_complex_matrix, get_inverse_fft_image
-from utils.in_out import read_image, write_image
-from utils.snipping import get_H_zone, merge_pictures_H_zone
-from watermark import generate_watermark, get_rho, builtin_watermark
-
-
-def get_betta(c: np.ndarray) -> np.ndarray:
-    window = np.ones(shape=(9, 9)) / 81
-    mo = convolve2d(c, window, mode='same', boundary='fill')
-    mo_2 = np.ndarray(shape=c.shape)
-    for i in range(c.shape[0]):
-        for j in range(c.shape[1]):
-            tmp = convolve2d((c[i - 4 if i > 3 else 0:
-                                      i + 5 if i < (c.shape[0] - 3) else c.shape[0],
-                                    j - 4 if j > 3 else 0:
-                                    j + 5 if j < (c.shape[1] - 3) else c.shape[1]]
-                                    - mo[i, j]) ** 2, window, mode='same', boundary='fill')
-            mo_2[i, j] = tmp[i if i < 3 else 4, j if j < 3 else 4]
-    res = np.sqrt(mo_2) * 2
-    return res / res.max()
-
-def get_optimal_alpha(f, abs_fft_container, phase_fft_container, watermark):
-    params = {}
-
-    rho = 0.0
-    alpha = 0.6
-    while rho < 0.9 or alpha < 1.0:
-        H_zone_watermark = additional_embedding(f, BETA, watermark, alpha)
-
-        merged_abs_picture = merge_pictures_H_zone(abs_fft_container, H_zone_watermark)
-        complex_matrix = get_complex_matrix(merged_abs_picture, phase_fft_container)
-        processed_image = get_inverse_fft_image(complex_matrix)
-        write_image(processed_image, 'resource/bridge_processed_tmp.png')
-
-        processed_image = read_image('resource/bridge_processed_tmp.png')
-        fft_p_image = get_fft_image(processed_image)
-        abs_fft_p_image = get_abs_matrix(fft_p_image)
-
-        H_zone_p = get_H_zone(abs_fft_p_image)
-        changed_watermark = builtin_watermark(H_zone_p, f, alpha)
-        rho = get_rho(watermark, changed_watermark)
-
-        psnr = cv2.PSNR(container, processed_image)
-
-        if rho > 0.9:
-            params[psnr] = alpha
-            print(f'\033[32m', end='')
-
-        print(f'𝜌: {rho}, α: {alpha}, PSNR: {psnr}')
-        alpha += 0.02
-
-    min_psnr = max(params.keys())
-    max_alpha = params[min_psnr]
-    print(f'\033[35m', end='')
-    print(f'Result: α: {max_alpha}, Min PSNR: {min_psnr}')
-    print(f'\033[0m', end='')
-    return max_alpha
-
+from consts import task1consts, task2consts, task4consts, task3consts
+from lab2.task import embed, get_rho_for_image, embed_with_beta
+from lab2.utils.in_out import read_image
+from utils.distortion import cyclic_shift, rot_rest, sharpen, white_noise
 
 if __name__ == '__main__':
-
     container = read_image('resource/bridge.tif')
+    H_zone, watermark, embedded_image = embed(container)
 
-    # 1. Реализовать генерацию ЦВЗ 𝛺 как псевдослучайной последовательности заданной длины из чисел,
-    # распределённых по нормальному закону
-    H_zone_length = int(container.shape[0] * 0.5) * int(container.shape[1] * 0.5)
-    watermark, _ = generate_watermark(H_zone_length, M, SIGMA, KEY)
+    rho = get_rho_for_image(H_zone, watermark, embedded_image)
+    print(f'Original rho: {rho}')
 
-    # 2. Реализовать трансформацию исходного контейнера к пространству признаков
-    fft_container = get_fft_image(container)
-    abs_fft_container = get_abs_matrix(fft_container)
-    phase_fft_container = get_phase_matrix(fft_container)
+    fig = plt.figure()
+    fig.set_figheight(15)
+    fig.set_figwidth(15)
 
-    # 3. Осуществить встраивание информации аддитивным методом встраивания.
-    # Значения параметравстраивания устанавливается произвольным образом.
-    H_zone = get_H_zone(abs_fft_container)
-    watermark = watermark.reshape(H_zone.shape)
-    H_zone_watermark = additional_embedding(H_zone, BETA, watermark, ALPHA)
+    cyclic_shift_images = cyclic_shift(embedded_image, task1consts.p_min, task1consts.p_max, task1consts.delta_p)
+    cyclic_shift_rhos = []
+    for i in range(0, cyclic_shift_images.shape[0]):
+        cyclic_shift_rhos.append(get_rho_for_image(H_zone, watermark, cyclic_shift_images[i]))
+    #
+    x = np.arange(0.1, 1, 0.1)
+    plt.subplot(2, 2, 1)
+    plt.plot(x, cyclic_shift_rhos)
+    plt.title('Rhos (cyclic_shift)')
+    # plt.show()
 
-    # 4. Сформировать носитель информации при помощи обратного преобразования
-    # от матрицы признаков к цифровому сигналу.  Сохранить его на диск.
-    merged_abs_picture = merge_pictures_H_zone(abs_fft_container, H_zone_watermark)
-    complex_matrix = get_complex_matrix(merged_abs_picture, phase_fft_container)
-    processed_image = get_inverse_fft_image(complex_matrix)
-    write_image(processed_image, 'resource/bridge_processed.tif')
+    rot_rest_images = rot_rest(embedded_image, task2consts.p_min, task2consts.p_max, task2consts.delta_p)
+    rot_rest_rhos = []
+    for i in range(0, rot_rest_images.shape[0]):
+        rot_rest_rhos.append(get_rho_for_image(H_zone, watermark, rot_rest_images[i]))
+    #
+    x = np.arange(0, 43, 7)
+    plt.subplot(2, 2, 2)
+    plt.plot(x, rot_rest_rhos)
+    plt.title('Rhos (rot_rest)')
+    # plt.show()
 
-    # 5. Считать носитель информации из файла. Реализовать трансформацию исходного контейнера к пространству признаков
-    processed_image     = read_image('resource/bridge_processed.tif')
-    fft_p_image         = get_fft_image(processed_image)
-    abs_fft_p_image     = get_abs_matrix(fft_p_image)
+    sharpen_images = sharpen(embedded_image, task3consts.p_min, task3consts.p_max, task3consts.delta_p)
+    sharpen_rhos = []
+    for i in range(0, sharpen_images.shape[0]):
+        sharpen_rhos.append(get_rho_for_image(H_zone, watermark, sharpen_images[i]))
+    #
+    x = np.arange(3, 16, 2)
+    plt.subplot(2, 2, 3)
+    plt.plot(x, sharpen_rhos)
+    plt.title('Rhos (sharpen)')
+    # plt.show()
 
-    # 6. Сформировать оценку встроенного ЦВЗ 𝛺̃неслепым методом (то есть, с использованием
-    # матрицы признаков исходного контейнера); выполнить детектирование при помощи функции
-    # близости 𝜌(𝛺,𝛺̃) вида (6.11).
-    H_zone_p = get_H_zone(abs_fft_p_image)
-    changed_watermark = builtin_watermark(H_zone_p, H_zone, ALPHA)
-    rho = get_rho(watermark, changed_watermark)
-
-    print('=============================')
-    print(f'Current 𝜌: {rho}, α: {ALPHA}')
-    print('=============================')
-
-    # 7. Осуществить автоматический подбор значения параметра встраивания методом перебора
-    # с целью обеспечения заданного значения функции близости 𝜌
-    print('=============================')
-    print(f'Search for best α...')
-    print('=============================')
-    get_optimal_alpha(H_zone, abs_fft_container, phase_fft_container, watermark)
-
-    # 8. «Ложное обнаружение»: генерируем 100 случайных последовательностей той же длины, что и 𝛺,
-    # и ищем значение функции близости 𝛺 с каждой из них. Строим график, проверяем,
-    # удаётся ли выбрать правильную последовательность.
-    print('=============================')
-    print('Fake detection calculating...')
-    print('=============================')
-    N = 100
-    rho_array = []
-    rho_array.append(rho)
-    x = np.arange(0, 101)
-    for i in range(0, N):
-        new_watermark, _ = generate_watermark(H_zone_length, M, SIGMA)
-        new_watermark = new_watermark.reshape(H_zone.shape)
-        rho = get_rho(new_watermark, changed_watermark)
-        rho_array.append(rho)
-        if i % 10 == 0:
-            print(f'Ready: {i}%')
-    ig, ax = plt.subplots()
-    ax.plot(x, np.array(rho_array))
-    # plt.ylim([0.915, 0.935])
+    noised_images = white_noise(embedded_image, task4consts.p_min, task4consts.p_max, task4consts.delta_p)
+    noised_rhos = []
+    for i in range(0, noised_images.shape[0]):
+        noised_rhos.append(get_rho_for_image(H_zone, watermark, noised_images[i]))
+    #
+    x = np.arange(400, 1001, 100)
+    plt.subplot(2, 2, 4)
+    plt.plot(x, noised_rhos)
+    plt.title('Rhos (white_noise)')
     plt.show()
 
-    betta = get_betta(get_H_zone(container))
-    H_zone_watermark = additional_embedding(H_zone, betta, watermark, ALPHA)
-    merged_abs_picture = merge_pictures_H_zone(abs_fft_container, H_zone_watermark)
-    complex_matrix = get_complex_matrix(merged_abs_picture, phase_fft_container)
-    processed_image = get_inverse_fft_image(complex_matrix)
 
-    fft_p_image = get_fft_image(processed_image)
-    abs_fft_p_image = get_abs_matrix(fft_p_image)
-    H_zone_p = get_H_zone(abs_fft_p_image)
-    changed_watermark = builtin_watermark(H_zone_p, H_zone, ALPHA)
-    rho = get_rho(watermark, changed_watermark)
 
-    print(f'𝜌: {rho}')
+    # imsave('resource/rot.tif', noised_images[6])
+
+    # =======================================8========================================
+    fig = plt.figure()
+    fig.set_figheight(15)
+    fig.set_figwidth(15)
+
+    H_zone, watermark, embedded_image, beta = embed_with_beta(container)
+    cyclic_shift_images = cyclic_shift(embedded_image, task1consts.p_min, task1consts.p_max, task1consts.delta_p)
+    cyclic_shift_rhos = []
+    for i in range(0, cyclic_shift_images.shape[0]):
+        cyclic_shift_rhos.append(get_rho_for_image(H_zone, watermark, cyclic_shift_images[i], beta))
+    #
+    x = np.arange(0.1, 1, 0.1)
+    plt.subplot(2, 2, 1)
+    plt.plot(x, cyclic_shift_rhos)
+    plt.title('Rhos (cyclic_shift beta MSE)')
+    # plt.show()
+
+    rot_rest_images = rot_rest(embedded_image, task2consts.p_min, task2consts.p_max, task2consts.delta_p)
+    rot_rest_rhos = []
+    for i in range(0, rot_rest_images.shape[0]):
+        rot_rest_rhos.append(get_rho_for_image(H_zone, watermark, rot_rest_images[i], beta))
+    #
+    x = np.arange(0, 43, 7)
+    plt.subplot(2, 2, 2)
+    plt.plot(x, rot_rest_rhos)
+    plt.title('Rhos (rot_rest beta MSE)')
+    # plt.show()
+
+    sharpen_images = sharpen(embedded_image, task3consts.p_min, task3consts.p_max, task3consts.delta_p)
+    sharpen_rhos = []
+    for i in range(0, sharpen_images.shape[0]):
+        sharpen_rhos.append(get_rho_for_image(H_zone, watermark, sharpen_images[i], beta))
+    #
+    x = np.arange(3, 16, 2)
+    plt.subplot(2, 2, 3)
+    plt.plot(x, sharpen_rhos)
+    plt.title('Rhos (sharpen beta MSE)')
+    # plt.show()
+
+    noised_images = white_noise(embedded_image, task4consts.p_min, task4consts.p_max, task4consts.delta_p)
+    noised_rhos = []
+    for i in range(0, noised_images.shape[0]):
+        noised_rhos.append(get_rho_for_image(H_zone, watermark, noised_images[i], beta))
+    #
+    x = np.arange(400, 1001, 100)
+    plt.subplot(2, 2, 4)
+    plt.plot(x, noised_rhos)
+    plt.title('Rhos (white_noise beta MSE)')
+    plt.show()
+

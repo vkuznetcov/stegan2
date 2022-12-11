@@ -8,8 +8,8 @@ def get_rho(omega, omega_changed):
     return nominator / denominator
 
 
-def builtin_watermark(f_w, f, alpha=1):
-    return (f_w - f) / alpha
+def builtin_watermark(f_w, f, alpha=1, betta=1):
+    return (f_w - f) / (alpha * betta)
 
 
 def generate_watermark(length, math_expectation, sigma, key=None):
